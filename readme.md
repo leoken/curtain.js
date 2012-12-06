@@ -6,7 +6,7 @@ This plugin allows you to create a web page with multiple fixed panels that unro
 To navigate, you can use your keyboard instead the scrollbar or mousewheel to navigate into the document. 
 But that's not all, there is more features! For example, you can easily add a fixed element or multiple "steps" element inside a pannel.
 
-I created this plugin for the upcoming website of my friend [Etienne](http://artographik.fr/). And I decided to deliver this one as an open source project.
+I created this plugin for the website of my friend [Etienne](http://artographik.fr/) but we didn't use it. And I decided to deliver this one as an open source project.
 I would like you to note that the transition effect between two panels is extensively inspired by http://editsquarterly.com
 We were also such inspired by the following websites:
 
@@ -18,14 +18,23 @@ We were also such inspired by the following websites:
 
 Feel free to fork the project on github or ping me on [twitter](http://twitter.com/_victa) for any comments.
 
-Demonstrations
--------------
+<a href='http://www.pledgie.com/campaigns/17333'><img alt='Click here to lend your support to: Curtain.js and make a donation at www.pledgie.com !' src='http://www.pledgie.com/campaigns/17333.png?skin_name=chrome' border='0' /></a>
+
+## Demonstrations
 
 * [Demo website](http://curtain.victorcoulon.fr)
-* [Artographik](http://artographik.fr/) (upcomming website)
 
-Documentation
--------------
+### Site using Curtain.js
+
+* http://www.visualstoryteller.nl/
+* http://chronopizza.net/
+* http://threepointline.cc
+* http://www.youdesignit.com/guides/t-shirts
+* http://hivemined.org/
+
+Send me your :)
+
+## Documentation
 
 ### Basic Usage
 
@@ -50,7 +59,8 @@ Valid options for curtain.js are:
 * ``scrollSpeed`` - Adjust the scroll speed (default ``400``)
 * ``menu`` - Bind event on "up" or "down" button (default ``null``)
 * ``curtainLinks`` - If you want add a ``<a>`` (or multiple) link to a specific panel simply add a class name to this option. Take a look of the example bellow.(default ``'.curtain-links'``)
-
+* ``enableKeys`` - Enable/Disable keyboard navigation (default ``true``)
+* ``easing`` -  Change this option to specify the easing function used by jQuery animate calls. (defaults ``swing``) (You muse use jQuery easing plugin or similar to have more easing functions)
 
 ### Example
 
@@ -163,35 +173,54 @@ var html = [
 $('.curtains').data('plugin_curtain').insert({
     html:html,
     htmlId: 'newpannel',
-    htmlClass: 'cover'
+    htmlClass: 'cover',
+    insertAfter:'#intro', // If null, the content is inserted at the end
+    goTo: false // Go to the new panel directly after the insertion (default: true)
 });
 
 ```
 
-**The ``id`` and the ``class`` attribute are optionals.**
+**``id``, ``class``, ``insertAfter`` and ``goTo`` attributes are optional.**
 
-Compatibility
--------------
+### Add callbacks to slide change events
+
+You can fire a callback when the slide changes
+
+```js
+$('.curtains').curtains({
+    nextSlide: function() { console.log('next slide'); },
+    prevSlide: function() { console.log('previous slide')}
+});
+```
+
+
+## Compatibility
 
 * Safari
 * Firefox
 * Chrome
-* IE7/IE8/IE9
+* IE8/IE9
 * iOs (iPhone/iPad) __but the curtain effect is disabled__
 * Android (Chrome/Opera) __but the curtain effect is disabled__
 
 
-Roadmap
--------------
+## Roadmap
 
 * Remove panels dynamically
 * Better android default browser support
+* scroll horizontally
 
-Credits
--------------
+## Credits
 
 ### Author
 [Victor Coulon](http://victorcoulon.fr) or ping me on twitter http://twitter.com/_victa
+
+### Contributors
+
+* [Jordan Jefferson](https://github.com/jordanj77)
+* [Francis Thomas](http://francisthomas.fr/)
+* [John Brown](http://www.thisisjohnbrown.com/)
+
 
 ### Inspirations
 

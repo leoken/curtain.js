@@ -1,7 +1,7 @@
 /*
 * Curtain.js - Create an unique page transitioning system
 * ---
-* Version: 1.1
+* Version: 1.4.1
 * Copyright 2011, Victor Coulon (http://victorcoulon.fr)
 * Released under the MIT Licence
 */
@@ -16,7 +16,11 @@
             mobile: false,
             scrollButtons: {},
             controls: null,
-            curtainLinks: '.curtain-links'
+            curtainLinks: '.curtain-links',
+            enableKeys: true,
+            easing: 'swing',
+            nextSlide: null,
+            prevSlide: null
         };
 
     // The actual plugin constructor
@@ -26,8 +30,6 @@
         // Public attributes
         this.element = element;
         this.options = $.extend( {}, defaults, options) ;
-
-        this.didScroll = false;
 
         this._defaults = defaults;
         this._name = pluginName;
@@ -40,6 +42,7 @@
             if(Object.prototype.toString.call(content) !== '[object Object]') {
                 throw new TypeError('Content must be an object');
             }
+            content.goTo = (content.goTo === true) ? true : false;
 
             // append the content to list
             var newEl = $(document.createElement('li')).attr('id', (content.htmlId) ? content.htmlId : null)
@@ -47,14 +50,47 @@
                                 .html( (content.html) ? content.html : null );
             $(self.element).append(newEl);
 
-            // re(init) cache elements
-            self.$element = $(self.element);
-            self.$li = $(self.element).find('>li');
 
-            self.setLinks();
-            $(window).load(function(){
-                self.setDimensions();
+            // Append Content after an element OR at the end
+            if(content.insertAfter && $(content.insertAfter).length) {
+                $(self.element).find(content.insertAfter).after(newEl);
+            } else {
+                $(self.element).append(newEl);
+            }
+
+
+            // When the element is ready
+            self.readyElement($(newEl), function(){
+                // re(init) cache elements
+                self.$element = $(self.element);
+                self.$li = $(self.element).find('>li');
+
+                // Mobile Fix
+                if(self.options.mobile){
+                    self.$li.css({position:'relative'});
+                    self.$element.find('.fixed').css({position:'absolute'});
+                }
+                
+                self.setLinks();
+
+                // Set dimensions after loading images (or not)
+                if($(newEl).find('img').length){
+                    $(newEl).find('img').load(function(){
+                        self.setDimensions();
+                    });
+                } else {
+                    self.setDimensions();
+                }
+
+                // Scroll to the new element
+                if(content.goTo === true){
+                    var position = $(newEl).attr('data-position') || null;
+                    self.scrollEl.animate({
+                        scrollTop:position
+                    }, self.options.scrollSpeed, self.options.easing);
+                }
             });
+
         };
     }
 
@@ -66,15 +102,26 @@
             this.$element = $(this.element);
             this.$li = $(this.element).find('>li');
 
+
             $.Android = (navigator.userAgent.match(/Android/i));
             $.iPhone = ((navigator.userAgent.match(/iPhone/i)) || (navigator.userAgent.match(/iPod/i)));
             $.iPad = ((navigator.userAgent.match(/iPad/i)));
             $.iOs4 = (/OS [1-4]_[0-9_]+ like Mac OS X/i.test(navigator.userAgent));
 
+
             if($.iPhone || $.iPad || $.Android){
                 this.options.mobile = true;
                 this.$li.css({position:'relative'});
                 this.$element.find('.fixed').css({position:'absolute'});
+            }
+            
+
+            if(this.options.mobile){
+               this.scrollEl =  this.$element;
+            } else if($.browser.mozilla || $.browser.msie) {
+                this.scrollEl = $('html');
+            } else {
+                this.scrollEl = $('body');
             }
 
             if(self.options.controls){
@@ -95,10 +142,42 @@
                 }
             }
 
+
+
+            // We'll check if our images are loaded
+            var images = [],
+                imagesLoaded = 0,
+                loadAllImages = function loadAllImages(callback){
+                    if(images.length === 0){
+                        callback();
+                        return false;
+                    }
+                    var img = new Image();
+                    $(img).attr('src',images[imagesLoaded]).load(function(){
+                    imagesLoaded++;
+                    if(imagesLoaded == images.length)
+                        callback();
+                    else
+                        loadAllImages(callback);
+                    });
+                };
+
+            self.$element.find('img').each(function(i,el){
+                images.push(el.src);
+            });
+
+
             // When all image is loaded
-            $(window).load(function(){
+            loadAllImages(function(){
                 self.setDimensions();
                 self.$li.eq(0).addClass('current');
+
+                // Cache
+                self.$current = self.$element.find('.current');
+                self.$fixed = self.$current.find('.fixed');
+                self.$step = self.$current.find('.step');
+                self.currentP = parseInt(self.$current.attr('data-position'), 10);
+                self.currentHeight = parseInt(self.$current.attr('data-height'), 10);
 
                 if(!self.options.mobile){
                     if(self.$li.eq(1).length)
@@ -109,25 +188,25 @@
                 self.setLinks();
                 self.isHashIsOnList(location.hash.substring(1));
             });
+
         },
         // Events
         scrollToPosition: function (direction){
             var position = null,
-                self = this,
-                scrollEl = (this.options.mobile) ? this.$element : $('body, html');
+                self = this;
 
             if($('html, body').is(':animated')){
                 return false;
             }
 
             if(direction === 'up' || direction == 'down'){
+
                 // Keyboard event
                 var $current = this.$element.find('.current'),
                     $next = (direction === 'up') ? $current.prev() : $current.next();
 
                 position = $next.attr('data-position') || null;
 
-                
                 // Step in the current panel ?
                 if($current.find('.step').length){
                     if(!$current.find('.current-step').length)
@@ -139,137 +218,151 @@
                 }
 
                 if(position){
-                    scrollEl.animate({
+                    self.scrollEl.animate({
                         scrollTop:position
-                    }, this.options.scrollSpeed);
+                    }, this.options.scrollSpeed, this.options.easing);
                 }
 
             } else if(direction === 'top'){
-                scrollEl.animate({
+                self.scrollEl.animate({
                     scrollTop:0
-                }, self.options.scrollSpeed).scrollTop(0);
+                }, self.options.scrollSpeed, self.options.easing);
             } else if(direction === 'bottom'){
-                scrollEl.animate({
+                self.scrollEl.animate({
                     scrollTop:self.options.bodyHeight
-                }, self.options.scrollSpeed).scrollTop(0);
+                }, self.options.scrollSpeed, self.options.easing);
             } else {
                 position = $("#"+direction).attr('data-position') || null;
                 if(position){
-                    scrollEl.animate({
+                    self.scrollEl.animate({
                         scrollTop:position
-                    }, this.options.scrollSpeed).scrollTop(position);
+                    }, this.options.scrollSpeed, this.options.easing);
                 }
             }
             
         },
         scrollEvent: function() {
-            var self = this;
+            var self = this,
+                docTop = $(document).scrollTop(),
+                windowHeight = $(window).height();
 
-            setInterval(function() {
-                if ( self.didScroll ) {
-                    self.didScroll = false;
+
+            if(docTop < self.currentP && self.$current.index() > 0){
+                if (self.options.prevSlide) {
+                    self.options.prevSlide();
+                }
+
+                    
+                // Scroll top
+                self._ignoreHashChange = true;
+                if(self.$current.prev().attr('id'))
+                    self.setHash(self.$current.prev().attr('id'));
+                 
+       
+                self.$current.removeClass('current').css({marginTop: 0})
+                    .nextAll().css({display:'none'}).end()
+                    .prev().addClass('current').css({display:'block'});
+  
+                // Cache
+                self.$current = self.$element.find('.current');
+                self.$fixed = self.$current.find('.fixed');
+                self.$step = self.$current.find('.step');
+                self.currentP = parseInt(self.$current.attr('data-position'), 10);
+                self.currentHeight = parseInt(self.$current.attr('data-height'), 10);
+
+            } else if(docTop < (self.currentP + self.$current.height())){
+                // Animate the current pannel during the scroll
+                var position = -(docTop-self.currentP);
+                self.$current.css({marginTop:position});
+
+                // If there is a fixed element in the current panel
+                if(self.$fixed.length){
+                    var dataTop = parseInt(self.$fixed.attr('data-top'), 10);
+                    
+                    if((docTop-self.currentP+windowHeight) >= self.currentHeight && self.$fixed.css('position') === 'fixed'){
+        
+                        self.$fixed.css({
+                            position: 'absolute',
+                            top: Math.abs(docTop-self.currentP + dataTop)
+                        });
+         
+
+                    } else if((docTop-self.currentP+windowHeight) <= self.currentHeight && self.$fixed.css('position') === 'absolute'){
+                        self.$fixed.css({
+                            position: 'fixed',
+                            top: dataTop
+                        });
+                    }
+
+                    
+                }
+
                 
-                    var docTop = $(document).scrollTop(),
-                        $current = self.$element.find('.current'),
-                        $fixed = $current.find('.fixed'),
-                        $step = $current.find('.step'),
-                        currentP = parseInt($current.attr('data-position'), 10),
-                        currentHeight = parseInt($current.attr('data-height'), 10),
-                        windowHeight = $(window).height();
-
-                    if(docTop < currentP && $current.index() > 0){
-                        // Scroll top
-                        self._ignoreHashChange = true;
-                        if($current.prev().attr('id'))
-                            window.location.hash = $current.prev().attr('id');
-                            
-                        $current.removeClass('current').css({marginTop: 0})
-                            .nextAll().css({display:'none'}).end()
-                            .prev().addClass('current').css({display:'block'});
-
-                    } else if(docTop < (currentP + $current.height())){
-                        // Animate the current pannel during the scroll
-                        $current.css({marginTop:-(docTop-currentP)});
-
-                        // If there is a fixed element in the current panel
-                        if($fixed.length){
-                            var dataTop = parseInt($fixed.attr('data-top'), 10);
-                            if((docTop-currentP+windowHeight) >= currentHeight && $fixed.css('position') === 'fixed'){
-                                $fixed.css({
-                                    position: 'absolute',
-                                    top: Math.abs(docTop-currentP + dataTop)
-                                });
-
-                            } else if((docTop-currentP+windowHeight) <= currentHeight && $fixed.css('position') === 'absolute'){
-                                $fixed.css({
-                                    position: 'fixed',
-                                    top: dataTop
-                                });
+                // If there is a step element in the current panel
+                if(self.$step.length){
+                    $.each(self.$step, function(i,el){
+                        if($(el).offset().top <= docTop+5 && ($(el).offset().top + $(el).outerHeight()) >= docTop+5){
+                            if(!$(el).hasClass('current-step')){
+                                self.$step.removeClass('current-step');
+                                $(el).addClass('current-step');
                             }
                         }
-
-                        
-                        // If there is a step element in the current panel
-                        if($step.length){
-                            $.each($step, function(i,el){
-                                if($(el).offset().top <= docTop+5 && ($(el).offset().top + $(el).outerHeight()) >= docTop+5){
-                                    if(!$(el).hasClass('current-step')){
-                                        $step.removeClass('current-step');
-                                        $(el).addClass('current-step');
-                                    }
-                                }
-                            });
-                        }
-
-                    } else {
-                        // Scroll bottom
-                        self._ignoreHashChange = true;
-                        if($current.next().attr('id'))
-                            window.location.hash = $current.next().attr('id');
-
-                        $current.removeClass('current')
-                            .css({display:'none'})
-                            .next().addClass('current').nextAll().css({display:'block'});
-                    }
+                    });
                 }
-            }, 5);
+
+            } else {
+                if (self.options.nextSlide) {
+                    self.options.nextSlide();
+                }
+                // Scroll bottom
+                self._ignoreHashChange = true;
+                if(self.$current.next().attr('id'))
+                    self.setHash(self.$current.next().attr('id'));
+
+                self.$current.removeClass('current')
+                    .css({display:'none'})
+                    .next().addClass('current').nextAll().css({display:'block'});
+
+                // Cache
+                self.$current = self.$element.find('.current');
+                self.$fixed = self.$current.find('.fixed');
+                self.$step = self.$current.find('.step');
+                self.currentP = parseInt(self.$current.attr('data-position'), 10);
+                self.currentHeight = parseInt(self.$current.attr('data-height'), 10);
+            }
+
 
         },
         scrollMobileEvent: function() {
             var self = this;
 
-            setInterval(function() {
-                if ( self.didScroll ) {
-                    self.didScroll = false;
-                
-                    var docTop = self.$element.scrollTop(),
-                        $current = self.$element.find('.current'),
-                        $step = $current.find('.step'),
-                        currentP = parseInt($current.attr('data-position'), 10),
-                        currentHeight = parseInt($current.attr('data-height'), 10),
-                        windowHeight = $(window).height();
+            var docTop = self.$element.scrollTop(),
+                $current = self.$element.find('.current'),
+                $step = $current.find('.step'),
+                currentP = parseInt($current.attr('data-position'), 10),
+                currentHeight = parseInt($current.attr('data-height'), 10),
+                windowHeight = $(window).height();
 
-                    if(docTop+10 < currentP && $current.index() > 0){
-                        $current.removeClass('current').prev().addClass('current');
-                    } else if(docTop+10 < (currentP + $current.height())){
-    
-                        // If there is a step element in the current panel
-                        if($step.length){
-                            $.each($step, function(i,el){
-                                if(($(el).position().top+currentP) <= docTop && (($(el).position().top+currentP) + $(el).outerHeight()) >= docTop){
-                                    if(!$(el).hasClass('current-step')){
-                                        $step.removeClass('current-step');
-                                        $(el).addClass('current-step');
-                                    }
-                                }
-                            });
+            if(docTop+10 < currentP && $current.index() > 0){
+                $current.removeClass('current').prev().addClass('current');
+            } else if(docTop+10 < (currentP + $current.height())){
+
+                // If there is a step element in the current panel
+                if($step.length){
+                    $.each($step, function(i,el){
+                        if(($(el).position().top+currentP) <= docTop && (($(el).position().top+currentP) + $(el).outerHeight()) >= docTop){
+                            if(!$(el).hasClass('current-step')){
+                                $step.removeClass('current-step');
+                                $(el).addClass('current-step');
+                            }
                         }
-
-                    } else {
-                        $current.removeClass('current').next().addClass('current');
-                    }
+                    });
                 }
-            }, 5);
+
+            } else {
+                $current.removeClass('current').next().addClass('current');
+            }
+
 
         },
         // Setters
@@ -313,40 +406,40 @@
 
             if(self.options.mobile) {
                 self.$element.on('scroll', function(){
-                    self.didScroll = true;
                     self.scrollMobileEvent();
                 });
             } else {
                 $(window).on('scroll', function(){
-                    self.didScroll = true;
                     self.scrollEvent();
                 });
             }
-
-            $(document).on('keydown', function(e){
-                if(e.keyCode === 38 || e.keyCode === 37) {
-                    self.scrollToPosition('up');
-                    e.preventDefault();
-                    return false;
-                }
-                if(e.keyCode === 40 || e.keyCode === 39){
-                    self.scrollToPosition('down');
-                    e.preventDefault();
-                    return false;
-                }
-                // Home button
-                if(e.keyCode === 36){
-                    self.scrollToPosition('top');
-                    e.preventDefault();
-                    return false;
-                }
-                // End button
-                if(e.keyCode === 35){
-                    self.scrollToPosition('bottom');
-                    e.preventDefault();
-                    return false;
-                }
-            });
+            
+            if(self.options.enableKeys) {
+                $(document).on('keydown', function(e){
+                    if(e.keyCode === 38 || e.keyCode === 37) {
+                        self.scrollToPosition('up');
+                        e.preventDefault();
+                        return false;
+                    }
+                    if(e.keyCode === 40 || e.keyCode === 39){
+                        self.scrollToPosition('down');
+                        e.preventDefault();
+                        return false;
+                    }
+                    // Home button
+                    if(e.keyCode === 36){
+                        self.scrollToPosition('top');
+                        e.preventDefault();
+                        return false;
+                    }
+                    // End button
+                    if(e.keyCode === 35){
+                        self.scrollToPosition('bottom');
+                        e.preventDefault();
+                        return false;
+                    }
+                });
+            }
 
             if(self.options.scrollButtons){
                 if(self.options.scrollButtons.up){
@@ -366,17 +459,16 @@
             if(self.options.curtainLinks){
                 $(self.options.curtainLinks).on('click', function(e){
                     e.preventDefault();
-                    var href = $(this).attr('href'),
-                        scrollEl = (self.options.mobile) ? self.$element : $('body, html');
+                    var href = $(this).attr('href');
                     
                     if(!self.isHashIsOnList(href.substring(1)) && position)
                         return false;
 
                     var position = $(href).attr('data-position') || null;
                     if(position){
-                        scrollEl.animate({
+                        self.scrollEl.animate({
                             scrollTop:position
-                        }, self.options.scrollSpeed).scrollTop(position);
+                        }, self.options.scrollSpeed, self.options.easing);
                     }
                     return false;
                 });
@@ -407,7 +499,12 @@
             });
         },
         setHash: function(hash){
-            window.location.hash = hash;
+            if(history.pushState) {
+                history.pushState(null, null, '#'+hash);
+            }
+            else {
+                location.hash = hash;
+            }
         },
         // Utils
         isHashIsOnList: function(hash){
@@ -418,6 +515,14 @@
                     return false;
                 }
             });
+        },
+        readyElement: function(el,callback){
+          var interval = setInterval(function(){
+            if(el.length){
+              callback(el.length);
+              clearInterval(interval);
+            }
+          },60);
         }
     };
 

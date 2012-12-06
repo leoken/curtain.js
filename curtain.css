@@ -19,6 +19,6 @@ html{
     min-height: 100%;
     overflow: hidden;
     z-index:1;
-    -webkit-backface-visibility:hidden; /* Remove if you got display issues */
 }
+.curtains>li.hidden{display:none;}
 .curtains>li:first-child{z-index:2;}
